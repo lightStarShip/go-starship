@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/lightStarShip/go-server/config"
 	"github.com/lightStarShip/go-server/service"
 	"github.com/lightStarShip/go-server/utils"
 	"github.com/spf13/cobra"
@@ -10,14 +11,6 @@ import (
 	"os/signal"
 	"strconv"
 	"syscall"
-)
-
-type SysParam struct {
-	version bool
-}
-
-var (
-	param = &SysParam{}
 )
 
 var rootCmd = &cobra.Command{
@@ -33,8 +26,9 @@ var rootCmd = &cobra.Command{
 func init() {
 	flags := rootCmd.Flags()
 
-	flags.BoolVarP(&param.version, "version",
+	flags.BoolVarP(&config.SysConfig.Version, "version",
 		"v", false, "starship -v")
+	flags.BoolVar(&config.SysConfig.FreeMode, "free", false, "starship --free")
 }
 
 func main() {
@@ -44,9 +38,13 @@ func main() {
 }
 
 func mainRun(_ *cobra.Command, _ []string) {
-	if param.version {
+	if config.SysConfig.Version {
 		fmt.Println(utils.VerStr())
 		return
+	}
+
+	if err := config.SetupFDLimit(); err != nil {
+		panic(err)
 	}
 
 	if err := service.Inst().StartUp(); err != nil {
@@ -60,7 +58,7 @@ func waitShutdownSignal() {
 
 	pid := strconv.Itoa(os.Getpid())
 	fmt.Printf("\n>>>>>>>>>>starship start at pid(%s)<<<<<<<<<<\n", pid)
-	if err := ioutil.WriteFile(utils.PidFilePath(), []byte(pid), 0644); err != nil {
+	if err := ioutil.WriteFile(config.PidFilePath(), []byte(pid), 0644); err != nil {
 		fmt.Print("failed to write running pid", err)
 	}
 	sigCh := make(chan os.Signal, 1)

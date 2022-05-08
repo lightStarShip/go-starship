@@ -1,6 +1,9 @@
 package service
 
-import "sync"
+import (
+	"github.com/lightStarShip/go-server/config"
+	"sync"
+)
 
 type Proxy interface {
 	StartUp() error
@@ -14,7 +17,11 @@ var (
 
 func Inst() Proxy {
 	once.Do(func() {
-		_instance = newFreeService()
+		if config.SysConfig.FreeMode {
+			_instance = newFreeService()
+		} else {
+			_instance = newVipService()
+		}
 	})
 	return _instance
 }
