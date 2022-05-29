@@ -23,11 +23,10 @@ endif
 .PHONY: all
 .PHONY: pbs
 .PHONY: test
-.PHONY: contract
 
 BINDIR=$(INCLUDE)/bin
 
-all: pbs contract build
+all: pbs sol build
 
 build:
 	GOOS=$(OS) GOARCH=amd64 $(GOBUILD) -o $(BINDIR)/$(NAME)
@@ -38,16 +37,16 @@ pbs:
 sol:
 	cd contract/ && $(MAKE)
 
-target:=mac
+resdir := ./webserver
+webfs:
+	go-bindata -o $(resdir)/webfs/webfs.go -pkg=webfs $(resdir)/html/dist/...
 
 mac:
 	GOOS=darwin go build -ldflags '-w -s' -o $(BINDIR)/$(NAME).mac
 arm:
-	CC=aarch64-linux-gnu-gcc CGO_ENABLED=1 GOOS=linux GOARM=7 GOARCH=arm64 go build -ldflags '-w -s' -o $(BINDIR)/$(NAME).arm
-linux:
-	GOOS=linux GOARCH=amd64 go build -ldflags '-w -s' -o $(NAME).lnx
-win:
-	GOOS=windows GOARCH=amd64 go build -ldflags '-w -s' -o $(BINDIR)/$(NAME).exe
+	GOOS=linux GOARM=7 GOARCH=arm go build -ldflags '-w -s' -o $(BINDIR)/$(NAME).arm
+lnx:
+	GOOS=linux go build -ldflags '-w -s' -o $(NAME).lnx
 
 clean:
 	rm $(BINDIR)/$(NAME)

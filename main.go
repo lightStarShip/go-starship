@@ -2,74 +2,85 @@ package main
 
 import (
 	"fmt"
-	"github.com/lightStarShip/go-server/config"
-	"github.com/lightStarShip/go-server/service"
-	"github.com/lightStarShip/go-server/utils"
+	"github.com/lightStarShip/go-starship/node"
+	"github.com/lightStarShip/go-starship/pbs"
 	"github.com/spf13/cobra"
-	"io/ioutil"
 	"os"
 	"os/signal"
 	"strconv"
 	"syscall"
 )
 
+var param struct {
+	debug    bool
+	version  bool
+	CMDPort  string
+	password string
+	path     string
+}
+
 var rootCmd = &cobra.Command{
-	Use: "starship",
-
-	Short: "starship is a vpn proxy",
-
-	Long: `usage description::TODO::`,
-
-	Run: mainRun,
+	Use:   "Simple",
+	Short: "Simple",
+	Long:  `usage description`,
+	Run:   mainRun,
 }
 
 func init() {
-	flags := rootCmd.Flags()
 
-	flags.BoolVarP(&config.SysConfig.Version, "version",
-		"v", false, "starship -v")
-	flags.BoolVar(&config.SysConfig.FreeMode, "free", false, "starship --free")
+	rootCmd.Flags().BoolVarP(&param.version, "version",
+		"v", false, "Simple version")
+
+	rootCmd.Flags().StringVarP(&param.password, "password",
+		"p", "", "Password to unlock miner")
+
+	rootCmd.Flags().StringVarP(&param.path, "wallet.path",
+		"w", "", "wallet path used in this miner")
+	rootCmd.Flags().StringVarP(&param.CMDPort, "cmdPort",
+		"c", "12776", "Cmd service port")
+
+	rootCmd.Flags().BoolVarP(&param.debug, "debug", "d", false, "true: ropsten, false: mainnet")
+
+	rootCmd.AddCommand(pbs.InitCmd)
+	rootCmd.AddCommand(pbs.ConfCmd)
+	rootCmd.AddCommand(pbs.ShowCmd)
+	rootCmd.AddCommand(pbs.AdvertiseCmd)
 }
 
 func main() {
 	if err := rootCmd.Execute(); err != nil {
-		panic(err)
+		fmt.Println(err)
+		os.Exit(1)
 	}
 }
 
 func mainRun(_ *cobra.Command, _ []string) {
-	if config.SysConfig.Version {
-		fmt.Println(utils.VerStr())
+	if param.version {
+		fmt.Println("Simple version: ", node.Version)
 		return
 	}
 
-	if err := config.SetupFDLimit(); err != nil {
-		panic(err)
-	}
-
-	if err := service.Inst().StartUp(); err != nil {
-		panic(err)
-	}
-
-	waitShutdownSignal()
+	node.PrepareConfig(param.password, param.path)
+	node.Inst().StartUp()
+	go pbs.StartCmdService(param.CMDPort)
+	done := make(chan bool, 1)
+	go waitSignal(done)
+	<-done
 }
 
-func waitShutdownSignal() {
-
+func waitSignal(done chan bool) {
 	pid := strconv.Itoa(os.Getpid())
-	fmt.Printf("\n>>>>>>>>>>starship start at pid(%s)<<<<<<<<<<\n", pid)
-	if err := ioutil.WriteFile(config.PidFilePath(), []byte(pid), 0644); err != nil {
-		fmt.Print("failed to write running pid", err)
-	}
+	fmt.Printf("\n>>>>>>>>>>miner start at pid(%s)<<<<<<<<<<\n", pid)
+
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh,
 		syscall.SIGINT,
 		syscall.SIGTERM,
-		syscall.SIGQUIT,
-		syscall.SIGUSR1,
-		syscall.SIGUSR2)
+		syscall.SIGQUIT)
 
 	sig := <-sigCh
-	service.Inst().ShutDown()
+
+	node.Inst().Stop()
 	fmt.Printf("\n>>>>>>>>>>process finished(%s)<<<<<<<<<<\n", sig)
+	done <- true
 }
